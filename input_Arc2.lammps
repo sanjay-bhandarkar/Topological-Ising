@@ -1,0 +1,148 @@
+#----------------------------------------------------------------------------------------------
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$     MC Simulation      $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+#----------------------------------------------------------------------------------------------
+
+
+#----------------------------------------Initialization----------------------------------------
+
+    units           lj
+    dimension       3
+    atom_style      angle
+    boundary        f f f 
+   pair_style      lj/cut 0.897969639
+    bond_style      harmonic 
+   pair_modify     shift yes
+    variable        seed file Seed.dat
+    print           'The seed is : ${seed}'
+    variable        r2 equal floor(random(1,5,${seed}))
+    read_data       Arc2_200.dat
+   pair_coeff      * * 1.0 0.8 0.897969639
+   special_bonds   lj 1.0 1.0 1.0
+
+#-----------------------------------------------------------------------------------------------
+
+#------------------------------------------Parameters-------------------------------------------
+
+    region          cylin_confine1 cylinder z 0.0 0.0 2.0 1 24 side in 
+    mass            * 1.0 
+    variable        n_part equal 400
+    variable        pe_eng equal pe
+    variable        myvar equal step
+   neighbor        2.0 bin
+   comm_modify     mode single cutoff 3.5
+    bond_coeff      1 100 1.0000
+
+#-----------------------------------------------------------------------------------------------
+
+#-----------------------------------------Simulation--------------------------------------------
+
+    thermo 	        1000
+    thermo_style 	custom step temp pe ke etotal press vol lx ly lz cpuremain
+    fix             mc all gcmc 1 0 ${n_part} 1 ${seed} 1.0 0 0.1 full_energy region cylin_confine1
+    fix             eng all print 1 '${myvar} ${pe_eng}' file Energy_Arc2_MC.dat screen no
+    dump            dump1 all atom 10 dump_Arc2_MC.lammpstrj
+    run             20000
+    write_data      Init_Arc2_MC.data pair ij           
+    clear
+#-----------------------------------------------------------------------------------------------
+
+
+#-----------------------------------------------------------------------------------------------
+#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$     LD Simulation      $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+#-----------------------------------------------------------------------------------------------
+
+
+#------------------------------------- Initialization ------------------------------------------
+
+   units           lj
+    dimension       3
+    atom_style      angle
+    boundary        f f f 
+   pair_style      lj/cut 0.897969639
+    bond_style      harmonic 
+   pair_modify     shift yes
+    read_data       Init_Arc2_MC.data
+   pair_coeff      * * 1.0 0.8 0.897969639
+   special_bonds   lj 1.0 1.0 1.0
+    
+
+#------------------------------------------------------------------------------------------
+
+#------------------------------------- Parameters -----------------------------------------
+
+    region          cylin_confine cylinder z 0.0 0.0 2.9 0 25 side in
+    mass            * 1.0 
+    variable        pe_eng equal pe
+    variable        myvar equal step
+    neighbor        2.0 bin
+    comm_modify     mode single cutoff 3.5
+    bond_coeff      1 100 1.0000
+    group           myatoms type 1
+    group           myatoms type 2
+    group           sloop1 id 1:50:1
+    group           sloop2 id 151:200:1
+    group           bloop1 id 51:150:1
+    group           sloop3 id 201:250:1
+    group           sloop4 id 351:400:1
+    group           bloop2 id 251:350:1
+    group           ears1 union sloop1 sloop2
+    group           ears2 union sloop3 sloop4
+
+#------------------------------------------------------------------------------------------
+
+#--------------------------------- -- Calculations -----------------------------------------
+
+    compute         com_bloop1 bloop1 com
+    compute         com_bloop2 bloop2 com
+    compute         com_ears1   ears1 com
+    compute         com_ears2   ears2 com
+
+    variable        x_bloop1 equal c_com_bloop1[1]
+    variable        y_bloop1 equal c_com_bloop1[2]
+    variable        z_bloop1 equal c_com_bloop1[3]
+    variable        x_bloop2 equal c_com_bloop2[1]
+    variable        y_bloop2 equal c_com_bloop2[2]
+    variable        z_bloop2 equal c_com_bloop2[3]
+    variable        x_ears1 equal c_com_ears1[1]
+    variable        y_ears1 equal c_com_ears1[2]
+    variable        z_ears1 equal c_com_ears1[3]
+    variable        x_ears2 equal c_com_ears2[1]
+    variable        y_ears2 equal c_com_ears2[2]
+    variable        z_ears2 equal c_com_ears2[3]
+
+    variable        vec1x equal 'v_x_bloop1-v_x_ears1'
+    variable        vec1y equal 'v_y_bloop1-v_y_ears1'
+    variable        vec1z equal 'v_z_bloop1-v_z_ears1'
+    variable        vec2x equal 'v_x_bloop2-v_x_ears2'
+    variable        vec2y equal 'v_y_bloop2-v_y_ears2'
+    variable        vec2z equal 'v_z_bloop2-v_z_ears2'
+
+    variable        vec1norm equal 'sqrt(v_vec1x*v_vec1x + v_vec1y*v_vec1y + v_vec1z*v_vec1z)'
+    variable        vec2norm equal 'sqrt(v_vec2x*v_vec2x + v_vec2y*v_vec2y + v_vec2z*v_vec2z)'
+    variable        dot_prod equal 'v_vec1x*v_vec2x + v_vec1y*v_vec2y + v_vec1z*v_vec2z'
+    variable        norm_dot equal 'v_dot_prod/(v_vec1norm*v_vec2norm)'
+
+#------------------------------------------------------------------------------------------
+
+#---------------------------------------- Run ----------------------------------------------
+
+    thermo          10000000
+    thermo_style 	custom step temp pe ke etotal press vol lx ly lz cpuremain
+    fix             wall all wall/region cylin_confine lj126 1.0 0.4 0.448984819
+    fix_modify      wall energy yes
+    fix             mynve all nve
+    fix             LD all langevin 1.0 1.0 1.0 ${seed}
+    dump            dump1 all atom 100000 dump_Arc2.lammpstrj
+    fix             eng all print 10000 '${myvar} ${pe_eng}' file Energy_Arc2.dat screen no
+    fix             ori all ave/time 1 100000 100000 v_norm_dot file DotProd_Arc2.dat 
+    fix             pos_com1 all print 10000 '${myvar} ${x_bloop1} ${y_bloop1} ${z_bloop1}' file Big_Loop1_COM.dat screen no
+    fix             pos_com2 all print 10000 '${myvar} ${x_bloop2} ${y_bloop2} ${z_bloop2}' file Big_Loop2_COM.dat screen no
+    fix             pos_com3 all print 10000 '${myvar} ${x_ears1} ${y_ears1} ${z_ears1}' file Small_Loops1_COM.dat screen no
+    fix             pos_com4 all print 10000 '${myvar} ${x_ears2} ${y_ears2} ${z_ears2}' file Small_Loops2_COM.dat screen no
+    dump            mydump all custom 10000 Positions.dat id type x y z ix iy iz
+    timestep        0.01
+    run             200000000
+    write_data      Init.data
+
+#------------------------------------------------------------------------------------------
+
