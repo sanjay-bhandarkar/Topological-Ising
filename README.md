@@ -1,1 +1,1 @@
-The following files were used to analyze and plot the data generated using LAMMPS for this project. An 
+The following files were used to analyze and plot the data generated using LAMMPS for this project. The file 'Arc2_200.dat' can be used as input to the lammps script 'input_Arc2.lammps' to generate the data. The various quantities can be plooted using the Python files
